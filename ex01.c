@@ -17,7 +17,11 @@
 MODULE_LICENSE("GPL");
 
 char *ptr;
+<<<<<<< HEAD
 truct btusb_data {
+=======
+struct btusb_data {
+>>>>>>> f15ac36cfaf977a90409b2601e6ffbb2b5c5849a
     struct hci_dev       *hdev;
     struct usb_device    *udev;
     struct usb_interface *intf;
@@ -58,7 +62,15 @@ truct btusb_data {
     unsigned int sco_num;
     int isoc_altsetting;
     int suspend_count;
+<<<<<<< HEAD
 
+=======
+    int (*recv_event)(struct hci_dev *hdev, struct sk_buff *skb);
+    int (*recv_bulk)(struct btusb_data *data, void *buffer, int count);
+
+    int (*setup_on_usb)(struct hci_dev *hdev);
+};
+>>>>>>> f15ac36cfaf977a90409b2601e6ffbb2b5c5849a
 
 struct usb_device *device;
 struct usb_class_driver class;
@@ -230,7 +242,11 @@ ssize_t read_dev(struct file * read_file, char * buf, size_t size, loff_t * offs
 #endif
 int open_dev(struct inode *inode, struct file *open_file) 
 {
+<<<<<<< HEAD
 	struct usb_skel *dev;
+=======
+	struct btusb_data *dev;
+>>>>>>> f15ac36cfaf977a90409b2601e6ffbb2b5c5849a
 	struct usb_interface *interface;
 	int subminor;
 	
@@ -282,15 +298,39 @@ int bt_probe(struct usb_interface *interface,const struct usb_device_id *id)
 		struct usb_host_interface *my_ptr;
 		struct usb_host_interface *my_ptr_alt;
 		struct usb_endpoint_descriptor *endpoint;
+<<<<<<< HEAD
 		struct usb_skel *dev;
 		
 		/* allocate memory for our device state and initialize it */
     	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+=======
+		struct btusb_data *dev;
+		
+		/* allocate memory for our device state and initialize it */
+    	dev = devm_kzalloc(&interface->dev,sizeof(*dev), GFP_KERNEL);
+>>>>>>> f15ac36cfaf977a90409b2601e6ffbb2b5c5849a
     	if (!dev)
         {
 			printk(KERN_ALERT "kzalloc error\n");
 			return -1;
 		}
+<<<<<<< HEAD
+=======
+		
+		INIT_WORK(&data->work, btusb_work);
+	    INIT_WORK(&data->waker, btusb_waker);
+    	init_usb_anchor(&data->deferred);
+    	init_usb_anchor(&data->tx_anchor);
+    	spin_lock_init(&data->txlock);
+
+    	init_usb_anchor(&data->intr_anchor);
+    	init_usb_anchor(&data->bulk_anchor);
+    	init_usb_anchor(&data->isoc_anchor);
+    	init_usb_anchor(&data->diag_anchor);
+    	spin_lock_init(&data->rxlock);
+
+#if 0
+>>>>>>> f15ac36cfaf977a90409b2601e6ffbb2b5c5849a
     	kref_init(&dev->kref);
     	sema_init(&dev->limit_sem, 4);
     	mutex_init(&dev->io_mutex);
@@ -303,10 +343,15 @@ int bt_probe(struct usb_interface *interface,const struct usb_device_id *id)
 		endpoint = &my_ptr->endpoint[1].desc;
 		intr = endpoint->bEndpointAddress;
 
+#endif
         class.name = "usb/bluetooth%d";
         class.fops = &fops;
 		class.minor_base =   192;
+<<<<<<< HEAD
 		usb_set_intfdata(interface,dev);
+=======
+	//	usb_set_intfdata(interface,dev);
+>>>>>>> f15ac36cfaf977a90409b2601e6ffbb2b5c5849a
              
 //		intr = ptr;    
         if((retval = usb_register_dev(interface,&class)) < 0)
@@ -325,7 +370,12 @@ int bt_probe(struct usb_interface *interface,const struct usb_device_id *id)
 //			printk(KERN_INFO "ED[%d]->bmAttributes: 0x%02X\n",i,endpoint->bmAttributes);
 //			printk(KERN_INFO "ED[%d]->wMaxPacketSize: 0x%04X (%d)\n",i, endpoint->wMaxPacketSize,endpoint->wMaxPacketSize);
 		}
+<<<<<<< HEAD
 		printk(KERN_INFO "Agiilg\n");
+=======
+	
+			printk(KERN_INFO "Agiilg\n");
+>>>>>>> f15ac36cfaf977a90409b2601e6ffbb2b5c5849a
 		for (i = 0; i < my_ptr->desc.bNumEndpoints; i++)
         {
             endpoint = &my_ptr_alt->endpoint[i].desc;
