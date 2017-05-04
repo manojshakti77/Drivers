@@ -1,3 +1,5 @@
+/* http://opensourceforu.com/2016/02/waiting-and-blocking-in-a-linux-driver/ */
+
 #include<linux/init.h>
 #include<linux/module.h>
 #include<linux/fs.h>//For struct file_operations
