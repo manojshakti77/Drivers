@@ -17,6 +17,11 @@
 
 MODULE_LICENSE("GPL");
 
+#define JIFFY
+
+#ifdef JIFFY 
+#include<linux/jiffies.h>
+#endif
 
 struct usb_device *device;
 struct usb_class_driver class;
@@ -58,9 +63,7 @@ struct usb_skel {
 };
 #define r_size 16
 
-static struct task_struct *sleeping_task;
 
-static int flag = 0;
 
 #if 1
 ssize_t write_dev(struct file *file, const char *buf, size_t size, loff_t *offset )
@@ -91,6 +94,7 @@ ssize_t write_dev(struct file *file, const char *buf, size_t size, loff_t *offse
         return 0;
     }
 
+#if 0
 	if(flag == 1)
 	{
 		retval = wake_up_process(sleeping_task);
@@ -100,6 +104,7 @@ ssize_t write_dev(struct file *file, const char *buf, size_t size, loff_t *offse
         	printk(KERN_ALERT "Process already running.....\n");
 		flag = 0;
 	}
+#endif
 
 //  retval = usb_bulk_msg(device,usb_sndbulkpipe(device,BULK_EP_OUT),bulk_buf,1024,&wrote_cnt,5000);
     retval = usb_control_msg(dev->udev,usb_sndctrlpipe(dev->udev,0),0x00,0x20,0,0,w_buf,wrote_cnt,5000);
@@ -120,6 +125,12 @@ ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset)
     int retval;
     int read_cnt;
     char *r_buf;
+
+#ifdef JIFFY
+	unsigned long a;
+	unsigned long b;
+	unsigned long diff;
+#endif
 	
 	printk(KERN_ALERT "READ_DEV\n");
 
@@ -144,6 +155,7 @@ ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset)
         return 0;
     }   
 #endif
+#if 0
 	if(flag == 0) 
 	{
 	printk(KERN_ALERT "read sleeping_task is NULL\n");
@@ -151,18 +163,32 @@ ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset)
 //	if(sleeping_task == NULL)
 //		printk(KERN_ALERT "sleeping_task is NULL\n");
 //	set_current_state(TASK_INTERRUPTIBLE);
-	schedule_work();
+	//schedule_work();
 	flag = 1;
 	}
+#endif
 //  retval = usb_bulk_msg(device,usb_rcvbulkpipe(device,BULK_EP_IN),bulk_buf_read,1024,&read_cnt,5000);
 //  retval = usb_bulk_msg(device,usb_rcvbulkpipe(device,BULK_EP_IN),bulk_buf_read,1024,&read_cnt,5000);
+#ifdef JIFFY
+	a = jiffies;
+#endif
+
     retval = usb_interrupt_msg(dev->udev,usb_rcvintpipe(dev->udev,0x81),r_buf,r_size,&read_cnt,5000);
     if(retval < 0)
     {
         printk(KERN_ALERT "READ ERROR......%d\n",retval);
         return retval;
     }
-	    if(copy_to_user(buf,r_buf,MIN(size,read_cnt)))
+#ifdef JIFFY
+	b = jiffies;
+	if(time_before(a,b))
+	{
+		diff = ((unsigned long)b - (unsigned long)a);
+		diff = (diff * 1000)/HZ;
+		printk(KERN_ALERT "JIFFY = %lu\n",diff);
+	}
+#endif
+	if(copy_to_user(buf,r_buf,MIN(size,read_cnt)))
     {
         printk(KERN_ALERT "READ::Error copy_to_user\n");
         return -EFAULT;
