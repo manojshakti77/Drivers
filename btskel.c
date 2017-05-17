@@ -225,8 +225,19 @@ int open_dev(struct inode *inode, struct file *file)
 #endif
     file->private_data = dev;
     printk(KERN_ALERT "OPEN_DEV\n");
+	
+    /*Register a interrupt handler*/
+    int request_irq(unsigned int irq,&handler,SA_SHIRQ, "manoj_bt_int",NULL);
+        
     return 0;
 }
+DECLARE_TASKLET(interupt_tasklet, func, data);
+irqreturn_t handler(int, void *, struct pt_regs *)
+{
+    /*Interrupt handling for the data present at the USB interrupt*/
+    
+}
+
 int release_dev(struct inode *inode, struct file *release_file)
 {
 	printk(KERN_ALERT "RELEASE_DEV\n");
