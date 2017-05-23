@@ -6,6 +6,8 @@
 #include<linux/slab.h>
 #include<linux/kernel.h>
 #include<linux/usb.h>
+#include<linux/interrupt.h>
+#include<linux/irq.h>
 
 #define MAJOR_NUMBER 30
 #define BULK_EP_OUT 0x01
@@ -197,12 +199,24 @@ ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset)
     return MIN(size,read_cnt);
 }
 #endif
+
+
+//DECLARE_TASKLET(interupt_tasklet, func, data);
+
+//irqreturn_t handler(int intr, void *dev_id, struct pt_regs *regs)
+irqreturn_t handler(int intr, void *dev_id)
+{
+    /*Interrupt handling for the data present at the USB interrupt*/
+	printk(KERN_ALERT "Interrupt....%d\n",intr);
+	return 0;
+}
+
 int open_dev(struct inode *inode, struct file *file) 
 {
 	struct usb_skel *dev;
     struct usb_interface *interface;
     int subminor = 0;
-//    int retval;
+    int retval;
 
     subminor = iminor(inode);
 	printk(KERN_ALERT "subminor...%d\n",subminor);
@@ -227,20 +241,18 @@ int open_dev(struct inode *inode, struct file *file)
     printk(KERN_ALERT "OPEN_DEV\n");
 	
     /*Register a interrupt handler*/
-    int request_irq(unsigned int irq,&handler,SA_SHIRQ, "manoj_bt_int",NULL);
-        
-    return 0;
-}
-DECLARE_TASKLET(interupt_tasklet, func, data);
-irqreturn_t handler(int, void *, struct pt_regs *)
-{
-    /*Interrupt handling for the data present at the USB interrupt*/
+    retval =  request_irq(18,handler,IRQF_SHARED, "manoj_bt_int",NULL);
+	printk(KERN_ALERT "request_irq retval....%d\n",retval);
+	enable_irq(18);
     
+	return 0;
 }
+
 
 int release_dev(struct inode *inode, struct file *release_file)
 {
 	printk(KERN_ALERT "RELEASE_DEV\n");
+	free_irq(18,NULL);
 	return 0;
 } 
 
