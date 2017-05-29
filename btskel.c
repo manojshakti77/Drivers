@@ -9,12 +9,6 @@
 #include<linux/interrupt.h>
 #include<linux/irq.h>
 
-#define MAJOR_NUMBER 30
-#define BULK_EP_OUT 0x01
-#define BULK_EP_IN 0x82
-
-//#define USB_TYPE_VENDOR 0x02 << 5
-//#define USB_DIR_OUT 0
 
 
 MODULE_LICENSE("GPL");
@@ -62,6 +56,13 @@ struct usb_skel {
     spinlock_t      err_lock;       /* lock for errors */
     struct kref     kref;
     struct mutex        io_mutex;       /* synchronize I/O with disconnect */
+	struct urb *int_urb;
+	char *int_buf;
+    struct usb_endpoint_descriptor *intr_ep;
+    struct usb_endpoint_descriptor *bulk_rx_ep;
+    struct usb_endpoint_descriptor *bulk_tx_ep;	
+	wait_queue_head_t   bulk_in_wait;       /* to wait for an ongoing read */
+	bool ongoing_read;
 };
 #define r_size 16
 
@@ -120,6 +121,7 @@ ssize_t write_dev(struct file *file, const char *buf, size_t size, loff_t *offse
     return wrote_cnt;
 //	return 0;
 }
+#if 0
 ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset) 
 {
 	    struct usb_skel *dev;
@@ -199,6 +201,98 @@ ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset)
     return MIN(size,read_cnt);
 }
 #endif
+#endif
+
+static void btusb_intr_complete(struct urb* urb)
+{
+	struct usb_skel *dev = urb->context;
+//	int i;
+
+	if(urb->status == 0)
+	{
+	printk(KERN_ALERT "btusb_intr_complete received\n");
+	}
+//	for(i=0;i<urb->actual_length;i++)
+//		printk(KERN_ALERT "0x%02X\n",dev->int_buf[i]);
+	dev->ongoing_read = 0;
+#if 0
+//	if(copy_to_user(temp,dev->int_buf,MIN(r_size,urb->actual_length)))
+	retval = copy_to_user(temp,dev->int_buf,MIN(r_size,urb->actual_length));
+	if(retval)
+    {
+        printk(KERN_ALERT "READ::Error copy_to_user.....%lu\n",retval);
+    }
+#endif
+	wake_up_interruptible(&dev->bulk_in_wait);
+	
+	return;
+}
+
+ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset) 
+{
+	struct usb_skel *dev;
+//	char *r_buf;
+	int status;
+	int i;
+	
+	dev = file->private_data;
+	printk(KERN_ALERT "READ\n");
+	printk(KERN_ALERT "Endpoint.....0x%02X\n",dev->intr_ep->bEndpointAddress);
+	if(!size)
+    {
+        printk(KERN_ALERT "Zero buffer zie to read\n");
+        return 0;
+    }
+
+    if(!dev->interface)
+    {
+        printk(KERN_ALERT "No device\n");
+        return 0;
+    }
+	dev->int_urb = usb_alloc_urb(0, GFP_KERNEL);
+    if (!dev->int_urb)
+	{
+		printk(KERN_ALERT "FAILED to usb_alloc_urb");
+        return -ENOMEM;
+	}
+#if 0
+//    if(copy_from_user(temp,buf,sizeof(char *)))
+    retval = copy_from_user(temp,buf,sizeof(temp));
+	if(retval)
+	{
+        printk(KERN_ALERT "READ::Error copy_from_user......%lu",retval);
+	}
+#endif
+    dev->int_buf = kmalloc(sizeof(char) * r_size,GFP_KERNEL);	
+    usb_fill_int_urb(dev->int_urb, dev->udev, usb_rcvintpipe(dev->udev,dev->intr_ep->bEndpointAddress), dev->int_buf,r_size,btusb_intr_complete,dev,dev->intr_ep->bInterval);
+//    usb_fill_int_urb(dev->int_urb, dev->udev, usb_rcvintpipe(dev->udev,0x81), dev->int_buf,r_size,btusb_intr_complete,dev,5000);
+	dev->int_urb->transfer_flags |= URB_FREE_BUFFER;
+	status = usb_urb_dir_in(dev->int_urb);
+	printk(KERN_ALERT "urb in interrupt direction....%d\n",status);
+	status = usb_urb_dir_out(dev->int_urb);
+	printk(KERN_ALERT "urb out interrupt direction....%d\n",status);
+	dev->ongoing_read = 1;
+	status = usb_submit_urb(dev->int_urb,GFP_KERNEL);
+	if(status < 0)	
+	{
+		printk(KERN_ALERT "Failed to submit usb....:%d\n",status);
+		return status;
+	}
+	status = wait_event_interruptible(dev->bulk_in_wait, (!dev->ongoing_read));
+    printk(KERN_ALERT "wait_event_interruptible....");
+    if (status < 0)
+       	printk(KERN_ALERT "Failed for wait_event_interruptible....%d\n",status);
+	dev->ongoing_read = 1;
+	for(i=0;i<dev->int_urb->actual_length;i++)
+		printk(KERN_ALERT "0x%02X\n",dev->int_buf[i]);
+	if(copy_to_user(buf,dev->int_buf,MIN(r_size,dev->int_urb->actual_length)))
+    {
+        printk(KERN_ALERT "READ::Error copy_to_user\n");
+        return -EFAULT;
+    }
+    printk(KERN_ALERT "READ_DEV......%d\n",dev->int_urb->actual_length);
+    return MIN(r_size,dev->int_urb->actual_length);
+}
 
 
 //DECLARE_TASKLET(interupt_tasklet, func, data);
@@ -216,7 +310,7 @@ int open_dev(struct inode *inode, struct file *file)
 	struct usb_skel *dev;
     struct usb_interface *interface;
     int subminor = 0;
-    int retval;
+    //int retval;
 
     subminor = iminor(inode);
 	printk(KERN_ALERT "subminor...%d\n",subminor);
@@ -240,10 +334,12 @@ int open_dev(struct inode *inode, struct file *file)
     file->private_data = dev;
     printk(KERN_ALERT "OPEN_DEV\n");
 	
+#if 0
     /*Register a interrupt handler*/
     retval =  request_irq(18,handler,IRQF_SHARED, "manoj_bt_int",NULL);
 	printk(KERN_ALERT "request_irq retval....%d\n",retval);
 	enable_irq(18);
+#endif
     
 	return 0;
 }
@@ -252,7 +348,7 @@ int open_dev(struct inode *inode, struct file *file)
 int release_dev(struct inode *inode, struct file *release_file)
 {
 	printk(KERN_ALERT "RELEASE_DEV\n");
-	free_irq(18,NULL);
+//	free_irq(18,NULL);
 	return 0;
 } 
 
@@ -268,13 +364,48 @@ int bt_probe(struct usb_interface *interface,const struct usb_device_id *id)
 {
         int retval;
 		struct usb_skel *dev;
+	    struct usb_endpoint_descriptor *ep_desc;
+		int i;
 
-		dev = kmalloc(sizeof(struct usb_skel ),GFP_KERNEL);
+//		dev = kmalloc(sizeof(struct usb_skel ),GFP_KERNEL);
+		dev = devm_kzalloc(&interface->dev, sizeof(*dev), GFP_KERNEL);
 		if(!dev)	
 		{
 			printk(KERN_ALERT "Error kmalloc....\n");
 			return -1;
 		}
+		printk(KERN_ALERT "Number=%d\n",interface->cur_altsetting->desc.bNumEndpoints);
+
+	    for (i = 0; i < interface->cur_altsetting->desc.bNumEndpoints; i++) {
+        ep_desc = &interface->cur_altsetting->endpoint[i].desc;
+
+        if (!dev->intr_ep && usb_endpoint_is_int_in(ep_desc)) {
+            dev->intr_ep = ep_desc;
+			printk(KERN_ALERT "0x%02X\n",dev->intr_ep->bEndpointAddress);
+            continue;
+        }
+
+        if (!dev->bulk_tx_ep && usb_endpoint_is_bulk_out(ep_desc)) {
+            dev->bulk_tx_ep = ep_desc;
+			printk(KERN_ALERT "0x%02X\n",dev->bulk_tx_ep->bEndpointAddress);
+            continue;
+        }
+
+        if (!dev->bulk_rx_ep && usb_endpoint_is_bulk_in(ep_desc)) {
+            dev->bulk_rx_ep = ep_desc;
+			printk(KERN_ALERT "0x%02X\n",dev->bulk_rx_ep->bEndpointAddress);
+            continue;
+        }
+    	}	
+
+    	if (!dev->intr_ep || !dev->bulk_tx_ep || !dev->bulk_rx_ep)
+		{
+			printk(KERN_ALERT "End points not found\n");
+        	return -ENODEV;
+		}
+		init_waitqueue_head(&dev->bulk_in_wait);
+//		printk(KERN_ALERT "Endpoints.....0x%02X,0x%02X,0x%02X\n",dev->intr_ep->bEndpointAddress,dev->bulk_tx_ep->bEndpointAddress,dev->bulk_rx_ep->bEndpointAddress);
+
 		dev->udev = usb_get_dev(interface_to_usbdev(interface));
         dev->interface = interface;
         usb_set_intfdata(interface,dev);
