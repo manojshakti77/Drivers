@@ -58,6 +58,7 @@ struct usb_skel {
     struct mutex        io_mutex;       /* synchronize I/O with disconnect */
 	struct urb *int_urb;
 	char *int_buf;
+    struct usb_anchor intr_anchor;
     struct usb_endpoint_descriptor *intr_ep;
     struct usb_endpoint_descriptor *bulk_rx_ep;
     struct usb_endpoint_descriptor *bulk_tx_ep;	
@@ -272,10 +273,12 @@ ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset)
 	status = usb_urb_dir_out(dev->int_urb);
 	printk(KERN_ALERT "urb out interrupt direction....%d\n",status);
 	dev->ongoing_read = 1;
+	usb_anchor_urb(dev->int_urb, &data->intr_anchor);
 	status = usb_submit_urb(dev->int_urb,GFP_KERNEL);
 	if(status < 0)	
 	{
 		printk(KERN_ALERT "Failed to submit usb....:%d\n",status);
+		usb_unanchor_urb(dev->int_urb);
 		return status;
 	}
 	status = wait_event_interruptible(dev->bulk_in_wait, (!dev->ongoing_read));
@@ -408,6 +411,7 @@ int bt_probe(struct usb_interface *interface,const struct usb_device_id *id)
 
 		dev->udev = usb_get_dev(interface_to_usbdev(interface));
         dev->interface = interface;
+	init_usb_anchor(&dev->intr_anchor);
         usb_set_intfdata(interface,dev);
         
 		//device = interface_to_usbdev(interface);
