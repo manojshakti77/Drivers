@@ -273,7 +273,7 @@ ssize_t read_dev(struct file *file, char * buf, size_t size, loff_t * offset)
 	status = usb_urb_dir_out(dev->int_urb);
 	printk(KERN_ALERT "urb out interrupt direction....%d\n",status);
 	dev->ongoing_read = 1;
-	usb_anchor_urb(dev->int_urb, &data->intr_anchor);
+	usb_anchor_urb(dev->int_urb, &dev->intr_anchor);
 	status = usb_submit_urb(dev->int_urb,GFP_KERNEL);
 	if(status < 0)	
 	{
