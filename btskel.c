@@ -411,7 +411,7 @@ int bt_probe(struct usb_interface *interface,const struct usb_device_id *id)
 
 		dev->udev = usb_get_dev(interface_to_usbdev(interface));
         dev->interface = interface;
-	init_usb_anchor(&dev->intr_anchor);
+		init_usb_anchor(&dev->intr_anchor);
         usb_set_intfdata(interface,dev);
         
 		//device = interface_to_usbdev(interface);
